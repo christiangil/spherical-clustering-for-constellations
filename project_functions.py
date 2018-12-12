@@ -48,9 +48,9 @@ pos = pos.rename(columns = {0:"x", 1:"y", "Dedeg":"z"})
 
 # star brightnesses from data
 star_mag = data["Hpmag"]
-dark = 0.9 * normalize(star_mag)
-# a normalized array setting the smallest brightnesses to be 1/10 of the largests brightnesses in feature space
-bright = np.array(1 - 0.9 * dark)
+dark = normalize(star_mag)
+# a normalized array setting the largest brightnesses to be 0.9 and the smallest to be 0 ends up creating a factor of 10 between the darkest and brightest stars
+bright = np.array(0.9 * np.array(1 - dark))
 
 
 # numpy version of converting right ascention and declination to cartesian coordinates on unit celestial sphere
@@ -72,7 +72,7 @@ percent_const /= np.sum(percent_const)  # make sure it normalizes to one
 
 
 # calculates the sum of (brightness-weighted) distances of a point on the celestial sphere to all of the stars
-def weighted_cosine_dists(center, weights=np.ones(n_stars)):
+def weighted_cosine_dists(center, weights=np.zeros(n_stars)):
     dists = np.zeros(n_stars)
     for i in range(n_stars):
         val = np.dot(center, pos.iloc[i])
@@ -82,7 +82,7 @@ def weighted_cosine_dists(center, weights=np.ones(n_stars)):
         else:
             # dists[i] = dark.iloc[center] * dark.iloc[i] * np.arccos(val)
             # dists[i] = np.arccos(val)  # spherical separation
-            dists[i] = weights[i] * (1 - val) # cosine dissimilarity
+            dists[i] = (1 - weights[i]) * (1 - val) # cosine dissimilarity, darker things should be seen as further away
     return dists
 
 
@@ -288,7 +288,7 @@ def k_means(n_const=88, n_stars=n_stars, weights=np.ones(n_stars), online=False,
                     print("improper online learning type assigned")
 
                 # move the cluster center towards the cluster member and renormalize
-                hold = centers_temp[0, current_assign, :] + eta * weights[i] * pos.iloc[i]
+                hold = centers_temp[0, current_assign, :] + eta * (0.1 + weights[i]) * pos.iloc[i]
                 centers_temp[0, current_assign, :] = hold / np.linalg.norm(hold)
 
             # add the new center to the history matrix
@@ -301,7 +301,8 @@ def k_means(n_const=88, n_stars=n_stars, weights=np.ones(n_stars), online=False,
             # only works for cosine dissimilarity
             for i in range(n_const):
                 ind = np.where(cluster_total[-1, :] == i)
-                sx = np.array([np.dot(pos["x"].iloc[ind], weights[ind]), np.dot(pos["y"].iloc[ind], weights[ind]), np.dot(pos["z"].iloc[ind], weights[ind])])
+                # this could be reworked
+                sx = np.array([np.dot(pos["x"].iloc[ind], (0.1 + weights[i])), np.dot(pos["y"].iloc[ind], (0.1 + weights[i])), np.dot(pos["z"].iloc[ind], (0.1 + weights[i]))])
                 centers_temp[0, i, :] = sx / np.linalg.norm(sx)
 
             # add the new center to the history matrix
@@ -419,10 +420,6 @@ def evaluation_clustering(cluster_func, use_weights=False, n_const=88, online=Fa
 
     # return the proper, final cluster centers
     return centers_final
-
-
-
-
 
 
 # initialize a large 2D figure with large labels. wide affects aspect ratio. plot_size changes the overall size
